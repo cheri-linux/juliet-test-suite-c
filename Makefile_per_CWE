@@ -1,0 +1,101 @@
+CC?=/usr/bin/gcc
+CPP?=/usr/bin/g++
+DEBUG=-g
+CFLAGS=-c
+LDFLAGS=-lpthread -lm -ljuliet-support
+LD=ld
+CPPFLAGS?=-DINCLUDEMAIN
+
+
+
+SUPPORT_DIR?=testcasesupport
+INCLUDES=-I ../../testcasesupport
+
+C_SUPPORT_PATH?=../../testcasesupport/
+C_SUPPORT_FILES=$(C_SUPPORT_PATH)io.c $(C_SUPPORT_PATH)std_thread.c
+C_SUPPORT_OBJECTS=io.o std_thread.o
+
+# Get all sub directories
+SUBDIRS=$(wildcard s0*)
+
+ifeq ($(SUBDIRS), )
+
+# Filter for windows specific files
+FILTER_OUT=$(wildcard CWE*w32*.c*) $(wildcard CWE*wchar_t*.c*)
+
+# Filter for human input expecting test cases or random-base test cases
+RAND_INPUT_FILTER_OUT=$(wildcard CWE*rand*) $(wildcard CWE*fgets*) $(wildcard CWE*fscanf*) $(wildcard CWE*socket*)
+
+# Filter for base variant only
+VARIANT_FILTER_IN=$(wildcard CWE*01.c)
+
+else
+
+# Filter for windows specific files
+FILTER_OUT=$(wildcard */CWE*w32*.c*) $(wildcard */CWE*wchar_t*.c*)
+
+# Filter for human input expecting test cases or random-base test cases
+RAND_INPUT_FILTER_OUT=$(wildcard */CWE*rand*) $(wildcard */CWE*fgets*) $(wildcard */CWE*fscanf*) $(wildcard */CWE*socket*)
+
+# Filter for base variant only
+VARIANT_FILTER_IN=$(wildcard */CWE*01.c)
+
+endif
+
+# only grab the .c files without "w32" or "wchar_t" in the name
+ALL=$(wildcard *)
+UNFILTERED=$(wildcard */CWE*.c) $(wildcard CWE*.c) $(wildcard */*/CWE*.c)
+C_SOURCES=$(filter $(VARIANT_FILTER_IN), $(filter-out $(FILTER_OUT) $(RAND_INPUT_FILTER_OUT),$(UNFILTERED)))
+C_OBJECTS=$(C_SOURCES:.c=.o)
+
+# only grab the .cpp files without "w32" or "wchar_t" in the name
+CXX_SOURCES=$(filter-out $(FILTER_OUT),$(wildcard CWE*.cpp))
+CXX_OBJECTS=$(CXX_SOURCES:.cpp=.o)
+
+SIMPLES=$(filter-out $(FILTER_OUT), $(wildcard CWE*0.c*) $(wildcard CWE*1.c*) $(wildcard CWE*2.c*) $(wildcard CWE*3.c*) $(wildcard CWE*4.c*)) \
+        $(filter-out $(FILTER_OUT), $(wildcard CWE*5.c*) $(wildcard CWE*6.c*) $(wildcard CWE*7.c*) $(wildcard CWE*8.c*) $(wildcard CWE*9.c*))
+SIMPLES_C=$(filter-out $(CXX_SOURCES), $(SIMPLES))
+SIMPLES_XX=$(filter-out $(C_SOURCES), $(SIMPLES))
+
+LETTEREDS=$(filter-out $(FILTER_OUT), $(wildcard CWE*a.c*))
+LETTEREDS_C=$(subst a.,.,$(filter-out $(CXX_SOURCES), $(LETTEREDS)))
+LETTEREDS_CXX=$(subst a.,.,$(filter-out $(C_SOURCES), $(LETTEREDS)))
+
+GOOD1S=$(filter-out $(FILTER_OUT), $(wildcard CWE*_good1.cpp))
+BADS=$(subst _good1.,_bad.,$(GOOD1S))
+
+INDIVIDUALS_C=$(sort $(subst .c,,$(C_SOURCES)))
+INDIVIDUALS_CXX=$(sort $(subst .cpp,,$(SIMPLES_CPP) $(LETTEREDS_CXX) $(BADS) $(GOOD1S)))
+
+OBJECTS=$(C_OBJECTS)
+
+
+echo:
+	@echo $(TOP_BIN_DIR)
+	@echo $(CPPFLAGS)
+
+all: $(TARGET)
+
+partial.o: $(C_OBJECTS) $(CXX_OBJECTS)
+	$(LD) -r $(C_OBJECTS) $(CXX_OBJECTS) -o $@
+
+individuals: $(INDIVIDUALS_C)
+
+$(INDIVIDUALS_C):
+	$(CC) $(INCLUDES) $(CPPFLAGS) -o $(BIN_DIR)/$(notdir $@) $(wildcard $@*.c) -L $(TOP_BIN_DIR) $(LDFLAGS)
+
+$(TARGET) : $(OBJECTS)
+	$(CPP) $(LDFLAGS) $(OBJECTS) -o $(TARGET)
+
+$(C_OBJECTS) : %.o:%.c
+	$(CC) $(CFLAGS) $(INCLUDES) $^ -o $@
+
+$(CXX_OBJECTS) : %.o:%.cpp
+	$(CPP) $(CFLAGS) $(INCLUDES) $^ -o $@
+
+$(C_SUPPORT_OBJECTS) : $(C_SUPPORT_FILES)
+	$(CC) $(CFLAGS) $(INCLUDES) $(C_SUPPORT_PATH)$(@:.o=.c) -o $@
+
+clean:
+	rm -rf *.o *.out $(TARGET)
+	rm -rf s*/*.o s*/*.out
